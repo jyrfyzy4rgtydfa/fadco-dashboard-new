@@ -102,7 +102,7 @@ if uploaded_files:
             # Summary Metrics Table
             summary_data = [
                 [Paragraph("<b>Metric</b>", styles['Normal']), Paragraph("<b>Value</b>", styles['Normal'])],
-                ["Total Combined Revenue", f"{total_rev:,.2f} €"],
+                ["Total Combined Revenue", f"{total_rev:,.2f} FCFA"],
                 ["Total Combined Proformas", f"{total_prof:,}"],
                 ["Month-over-Month Growth", growth_str]
             ]
