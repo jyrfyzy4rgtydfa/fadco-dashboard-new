@@ -63,7 +63,7 @@ if uploaded_files:
         total_revenue = df['Net_a_Payer'].sum()
         total_proformas_count = df.shape[0]
         
-        kpi1.metric(label="Total Combined Revenue", value=f"{total_revenue:,.2f} €")
+        kpi1.metric(label="Total Combined Revenue", value=f"{total_revenue:,.2f} FCFA")
         kpi2.metric(label="Total Combined Proformas", value=f"{total_proformas_count:,}")
         
         growth_text = "N/A (Need 2+ months)"
@@ -126,7 +126,7 @@ if uploaded_files:
                 table_data.append([
                     str(row['Commercial']),
                     f"{row['Total_Proformas']:,}",
-                    f"{row['Total_Net_a_Payer']:,.2f} €"
+                    f"{row['Total_Net_a_Payer']:,.2f} FCFA"
                 ])
                 
             t_breakdown = Table(table_data, colWidths=[200, 110, 140])
@@ -161,7 +161,7 @@ if uploaded_files:
         with col_left:
             st.subheader("👩‍💼 Performance Breakdown Table")
             st.dataframe(
-                commercial_stats.style.format({'Total_Net_a_Payer': '{:,.2f} €', 'Total_Proformas': '{:,}'}),
+                commercial_stats.style.format({'Total_Net_a_Payer': '{:,.2f} FCFA', 'Total_Proformas': '{:,}'}),
                 use_container_width=True
             )
             
