@@ -1,22 +1,37 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 import io
 
-# Import ReportLab elements for PDF generation
+# ReportLab imports for PDF Generation
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# Set up page config
-st.set_page_config(page_title="Sales Performance Dashboard", layout="wide")
-st.title("📊 Fadco Analytics Dashboard")
+# ---------------------------------------------------------
+# GLOBAL CONFIGURATION
+# Set your preferred currency symbol here (e.g., "FCFA", "$", "€", "MAD")
+# ---------------------------------------------------------
+CURRENCY_SYMBOL = "FCFA"
+
+st.set_page_config(page_title="Professional Sales & Comparison Dashboard", layout="wide")
+st.title("📊 Multi-Period Commercial Performance & Variance Dashboard")
 st.markdown("---")
 
 # 1. Multi-File Uploader
-uploaded_files = st.file_uploader("Upload one or more Excel Sales Files", type=["xlsx", "xls"], accept_multiple_files=True)
+uploaded_files = st.file_uploader(
+    "Upload two or more Excel files to perform comparative analysis", 
+    type=["xlsx", "xls"], 
+    accept_multiple_files=True
+)
+
+def format_currency(val):
+    if CURRENCY_SYMBOL in ["$", "€", "£"]:
+        return f"{CURRENCY_SYMBOL}{val:,.2f}"
+    return f"{val:,.0f} {CURRENCY_SYMBOL}"
 
 if uploaded_files:
     all_dfs = []
@@ -26,155 +41,270 @@ if uploaded_files:
             df_temp = pd.read_excel(uploaded_file)
             df_temp.columns = [col.strip() for col in df_temp.columns]
             
-            # Detect required columns dynamically
+            # Dynamic column detection
             date_col = [col for col in df_temp.columns if 'date' in col.lower()]
             comm_col = [col for col in df_temp.columns if 'commercial' in col.lower() or 'agent' in col.lower()]
             net_col = [col for col in df_temp.columns if 'net' in col.lower() or 'payer' in col.lower() or 'total' in col.lower()]
-            
             if date_col and comm_col and net_col:
                 df_temp = df_temp.rename(columns={comm_col[0]: 'Commercial', net_col[0]: 'Net_a_Payer', date_col[0]: 'Date'})
                 df_temp['Date'] = pd.to_datetime(df_temp['Date'])
                 df_temp['Net_a_Payer'] = pd.to_numeric(df_temp['Net_a_Payer'], errors='coerce').fillna(0)
+                df_temp['Source_File'] = uploaded_file.name
                 all_dfs.append(df_temp)
             else:
-                st.warning(f"⚠️ Skipped '{uploaded_file.name}': Missing 'Date', 'Commercial', or 'Net à Payer' columns.")
+                st.warning(f"⚠️ Skipped '{uploaded_file.name}': Missing required columns ('Date', 'Commercial', 'Net à Payer').")
         except Exception as e:
             st.error(f"Error reading {uploaded_file.name}: {e}")
 
     if all_dfs:
-        # Combine all uploaded excel sheets into one single database
+        # Merge all uploaded excel sheets
         df = pd.concat(all_dfs, ignore_index=True)
-        
-        # --- Data Calculations ---
-        # 1 & 2. Metrics per Commercial
-        commercial_stats = df.groupby('Commercial').agg(
-            Total_Proformas=('Net_a_Payer', 'count'),
-            Total_Net_a_Payer=('Net_a_Payer', 'sum')
-        ).reset_index().sort_values(by='Total_Net_a_Payer', ascending=False)
-
-        # 3. Monthly Comparisons
         df['YearMonth'] = df['Date'].dt.to_period('M')
-        monthly_sales = df.groupby('YearMonth')['Net_a_Payer'].sum().sort_index(ascending=False).reset_index()
         
-        # --- KPI Overview Layout ---
-        st.subheader("📈 Combined Quick Overview")
-        kpi1, kpi2, kpi3 = st.columns(3)
+        # Determine Periods dynamically
+        unique_periods = sorted(df['YearMonth'].unique())
+        
+        # --- Section 1: Executive Overview KPIs ---
+        st.subheader("📌 Executive Performance Summary")
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
         
         total_revenue = df['Net_a_Payer'].sum()
-        total_proformas_count = df.shape[0]
+        total_proformas = len(df)
+        total_commercials = df['Commercial'].nunique()
         
-        kpi1.metric(label="Total Combined Revenue", value=f"{total_revenue:,.2f} FCFA")
-        kpi2.metric(label="Total Combined Proformas", value=f"{total_proformas_count:,}")
+        kpi1.metric("Total Overall Revenue", format_currency(total_revenue))
+        kpi2.metric("Total Proformas Issued", f"{total_proformas:,}")
+        kpi3.metric("Active Commercials", f"{total_commercials}")
         
-        growth_text = "N/A (Need 2+ months)"
-        if len(monthly_sales) >= 2:
-            last_month_val = monthly_sales.iloc[0]['Net_a_Payer']
-            prev_month_val = monthly_sales.iloc[1]['Net_a_Payer']
-            last_month_name = str(monthly_sales.iloc[0]['YearMonth'])
-            prev_month_name = str(monthly_sales.iloc[1]['YearMonth'])
+        # Monthly Growth Metric
+        monthly_totals = df.groupby('YearMonth')['Net_a_Payer'].sum().sort_index(ascending=False).reset_index()
+        
+        if len(monthly_totals) >= 2:
+            latest_month_val = monthly_totals.iloc[0]['Net_a_Payer']
+            prev_month_val = monthly_totals.iloc[1]['Net_a_Payer']
+            growth = ((latest_month_val - prev_month_val) / prev_month_val) * 100 if prev_month_val != 0 else 0
             
-            growth_rate = ((last_month_val - prev_month_val) / prev_month_val) * 100 if prev_month_val != 0 else 0
-            growth_text = f"{growth_rate:+.1f}% ({last_month_name} vs {prev_month_name})"
-            
-            if last_month_val > prev_month_val:
-                kpi3.metric(label=f"Growth Trend", value=f"+{growth_rate:.1f}%", delta=f"More than {prev_month_name}")
-            else:
-                kpi3.metric(label=f"Growth Trend", value=f"{growth_rate:.1f}%", delta=f"Less than {prev_month_name}", delta_color="inverse")
+            kpi4.metric(
+                label=f"Latest Month Trend ({monthly_totals.iloc[0]['YearMonth']})", 
+                value=f"{growth:+.1f}%", 
+                delta=format_currency(latest_month_val - prev_month_val)
+            )
         else:
-            kpi3.metric(label="Growth Trend", value="N/A", delta="Insufficient timeline")
+            kpi4.metric("Latest Month Trend", "N/A", delta="Requires data from 2+ months")
 
-        # --- PDF Export Logic (Requirement 2) ---
-        def generate_pdf(stats_df, total_rev, total_prof, growth_str):
+        st.markdown("---")
+
+        # --- Section 2: Commercial Progression & Comparison Analysis ---
+        st.subheader("👩‍💼 Commercial Progression Analysis (Advancement / Decline)")
+        
+        if len(unique_periods) >= 2:
+            p_recent = unique_periods[-1]
+            p_previous = unique_periods[-2]
+            
+            st.info(f"💡 Comparing recent period **{p_recent}** vs previous period **{p_previous}**")
+            
+            df_recent = df[df['YearMonth'] == p_recent].groupby('Commercial').agg(
+                Recent_Revenue=('Net_a_Payer', 'sum'),
+                Recent_Proformas=('Net_a_Payer', 'count')
+            ).reset_index()
+            
+            df_prev = df[df['YearMonth'] == p_previous].groupby('Commercial').agg(
+                Prev_Revenue=('Net_a_Payer', 'sum'),
+                Prev_Proformas=('Net_a_Payer', 'count')
+            ).reset_index()
+            
+            # Merge for comparison
+            comp_df = pd.merge(df_recent, df_prev, on='Commercial', how='outer').fillna(0)
+            comp_df['Revenue_Diff'] = comp_df['Recent_Revenue'] - comp_df['Prev_Revenue']
+            comp_df['Proforma_Diff'] = comp_df['Recent_Proformas'] - comp_df['Prev_Proformas']
+            
+            # Progression logic
+            def determine_status(row):
+                if row['Revenue_Diff'] > 0:
+                    return "📈 Advancing"
+                elif row['Revenue_Diff'] < 0:
+                    return "📉 Declining"
+                else:
+                    return "➖ Stable"
+                    
+            comp_df['Status'] = comp_df.apply(determine_status, axis=1)
+            comp_df = comp_df.sort_values(by='Revenue_Diff', ascending=False)
+            
+            # Formatted table for UI
+            display_comp = comp_df.copy()
+            display_comp['Recent Revenue'] = display_comp['Recent_Revenue'].apply(format_currency)
+            display_comp['Previous Revenue'] = display_comp['Prev_Revenue'].apply(format_currency)
+            display_comp['Difference'] = display_comp['Revenue_Diff'].apply(format_currency)
+            
+            st.dataframe(
+                display_comp[['Commercial', 'Status', 'Recent Revenue', 'Previous Revenue', 'Difference', 'Recent_Proformas', 'Prev_Proformas']],
+                use_container_width=True
+            )
+            
+            # Side-by-side comparison chart
+            fig_comp = go.Figure()
+            fig_comp.add_trace(go.Bar(x=comp_df['Commercial'], y=comp_df['Prev_Revenue'], name=str(p_previous), marker_color='#94A3B8'))
+            fig_comp.add_trace(go.Bar(x=comp_df['Commercial'], y=comp_df['Recent_Revenue'], name=str(p_recent), marker_color='#1E3A8A'))
+            fig_comp.update_layout(barmode='group', title="Revenue Comparison per Commercial", xaxis_title="Commercial", yaxis_title="Net à Payer")
+            st.plotly_chart(fig_comp, use_container_width=True)
+            
+        else:
+            st.warning("⚠️ Upload data spanning across at least 2 distinct months to generate the side-by-side commercial comparison.")
+
+        st.markdown("---")
+
+        # --- Section 3: Monthly Breakdown & Evolution ---
+        st.subheader("📅 Monthly Revenue Evolution & Variance")
+        
+        monthly_df = df.groupby('YearMonth').agg(
+            Total_Revenue=('Net_a_Payer', 'sum'),
+            Total_Proformas=('Net_a_Payer', 'count')
+        ).reset_index().sort_values('YearMonth')
+        
+        monthly_df['Prev_Revenue'] = monthly_df['Total_Revenue'].shift(1).fillna(0)
+        monthly_df['Variance_Val'] = monthly_df['Total_Revenue'] - monthly_df['Prev_Revenue']
+        monthly_df['Growth_%'] = ((monthly_df['Total_Revenue'] - monthly_df['Prev_Revenue']) / monthly_df['Prev_Revenue']) * 100
+        monthly_df['Growth_%'] = monthly_df['Growth_%'].fillna(0)
+        
+        col_m1, col_m2 = st.columns([1, 1])
+        
+        with col_m1:
+            display_monthly = monthly_df.copy()
+            display_monthly['YearMonth'] = display_monthly['YearMonth'].astype(str)
+            display_monthly['Total Revenue'] = display_monthly['Total_Revenue'].apply(format_currency)
+            display_monthly['Variance'] = display_monthly['Variance_Val'].apply(format_currency)
+            display_monthly['Growth Rate'] = display_monthly['Growth_%'].apply(lambda x: f"{x:+.1f}%" if x != 0 else "0.0%")
+            
+            st.dataframe(
+                display_monthly[['YearMonth', 'Total Revenue', 'Total_Proformas', 'Variance', 'Growth Rate']],
+                use_container_width=True
+            )
+            
+        with col_m2:
+            monthly_chart = monthly_df.copy()
+            monthly_chart['YearMonth'] = monthly_chart['YearMonth'].astype(str)
+            fig_line = px.line(
+                monthly_chart, 
+                x='YearMonth', 
+                y='Total_Revenue', 
+                markers=True, 
+                title="Monthly Revenue Trend",
+                labels={'Total_Revenue': 'Revenue', 'YearMonth': 'Month'}
+            )
+            st.plotly_chart(fig_line, use_container_width=True)
+
+        st.markdown("---")
+
+        # --- Section 4: PDF Export Logic ---
+       # --- Section 4: PDF Export Logic (FIXED FOR OVERLAPPING & LONG NAMES) ---
+        def generate_comparison_pdf(overall_rev, overall_prof, comp_table, monthly_table):
             buffer = io.BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+            # Slightly wider margins and letter/A4 layout
+            doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=20, leftMargin=20, topMargin=30, bottomMargin=30)
             story = []
             
             styles = getSampleStyleSheet()
-            title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=22, textColor=colors.HexColor('#1E3A8A'), spaceAfter=20)
-            subtitle_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontSize=10, textColor=colors.gray, spaceAfter=20)
-            heading_style = ParagraphStyle('HeadStyle', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#0F172A'), spaceBefore=15, spaceAfter=10)
+            title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#1E3A8A'), spaceAfter=15)
+            heading_style = ParagraphStyle('HeadStyle', parent=styles['Heading2'], fontSize=12, textColor=colors.HexColor('#0F172A'), spaceBefore=12, spaceAfter=8)
             
-            # Title
-            story.append(Paragraph("Commercial Performance Report", title_style))
-            story.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", subtitle_style))
+            # Custom Paragraph style for table text wrapping
+            cell_style = ParagraphStyle('CellStyle', parent=styles['Normal'], fontSize=8, leading=10)
+            cell_header_style = ParagraphStyle('HeaderStyle', parent=styles['Normal'], fontSize=8, leading=10, textColor=colors.whitesmoke)
+
+            story.append(Paragraph("Commercial Comparison & Monthly Performance Report", title_style))
+            story.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
             story.append(Spacer(1, 10))
             
-            # Summary Metrics Table
-            summary_data = [
-                [Paragraph("<b>Metric</b>", styles['Normal']), Paragraph("<b>Value</b>", styles['Normal'])],
-                ["Total Combined Revenue", f"{total_rev:,.2f} FCFA"],
-                ["Total Combined Proformas", f"{total_prof:,}"],
-                ["Month-over-Month Growth", growth_str]
+            # Executive Summary
+            exec_data = [
+                [Paragraph("<b>Metric</b>", cell_style), Paragraph("<b>Value</b>", cell_style)],
+                ["Total Consolidated Revenue", format_currency(overall_rev)],
+                ["Total Proformas Generated", f"{overall_prof:,}"]
             ]
-            t_summary = Table(summary_data, colWidths=[200, 250])
-            t_summary.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (1,0), colors.HexColor('#F1F5F9')),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+            t_exec = Table(exec_data, colWidths=[200, 350])
+            t_exec.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F1F5F9')),
                 ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 6),
             ]))
             story.append(Paragraph("Executive Summary", heading_style))
-            story.append(t_summary)
-            story.append(Spacer(1, 20))
+            story.append(t_exec)
+            story.append(Spacer(1, 12))
             
-            # Commercial Breakdown Table
-            story.append(Paragraph("Performance Breakdown by Commercial", heading_style))
-            table_data = [[Paragraph("<b>Commercial Name</b>", styles['Normal']), 
-                           Paragraph("<b>Total Proformas</b>", styles['Normal']), 
-                           Paragraph("<b>Total Net à Payer</b>", styles['Normal'])]]
-            
-            for _, row in stats_df.iterrows():
-                table_data.append([
-                    str(row['Commercial']),
-                    f"{row['Total_Proformas']:,}",
-                    f"{row['Total_Net_a_Payer']:,.2f} FCFA"
-                ])
+            # Commercial Status Breakdown
+            if not comp_table.empty:
+                story.append(Paragraph("Commercial Progression Analysis", heading_style))
+                c_data = [[
+                    Paragraph("<b>Commercial</b>", cell_header_style),
+                    Paragraph("<b>Status</b>", cell_header_style),
+                    Paragraph("<b>Recent Rev.</b>", cell_header_style),
+                    Paragraph("<b>Prev. Rev.</b>", cell_header_style),
+                    Paragraph("<b>Diff.</b>", cell_header_style)
+                ]]
                 
-            t_breakdown = Table(table_data, colWidths=[200, 110, 140])
-            t_breakdown.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (2,0), colors.HexColor('#1E3A8A')),
-                ('TEXTCOLOR', (0,0), (2,0), colors.whitesmoke),
-                ('ALIGN', (1,0), (-1,-1), 'CENTER'),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#F8FAFC')]),
+                for _, r in comp_table.iterrows():
+                    # Clean status (replace emojis with clean text for PDF rendering)
+                    clean_status = str(r['Status']).replace("📈 ", "(+) ").replace("📉 ", "(-) ").replace("➖ ", "(=) ")
+                    
+                    c_data.append([
+                        Paragraph(str(r['Commercial']), cell_style), # Paragraph enables auto-wrapping for long names
+                        Paragraph(clean_status, cell_style),
+                        Paragraph(format_currency(r['Recent_Revenue']), cell_style),
+                        Paragraph(format_currency(r['Prev_Revenue']), cell_style),
+                        Paragraph(format_currency(r['Revenue_Diff']), cell_style)
+                    ])
+                
+                # Adjusted column widths to give 180 points to Commercial names
+                t_comm = Table(c_data, colWidths=[180, 75, 105, 105, 105])
+                t_comm.setStyle(TableStyle([
+                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E3A8A')),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+                    ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#F8FAFC')]),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+                    ('TOPPADDING', (0,0), (-1,-1), 5),
+                ]))
+                story.append(t_comm)
+                story.append(Spacer(1, 12))
+            
+            # Monthly Evolution Table
+            story.append(Paragraph("Monthly Sales Breakdown", heading_style))
+            m_data = [[
+                Paragraph("<b>Month</b>", cell_header_style),
+                Paragraph("<b>Total Revenue</b>", cell_header_style),
+                Paragraph("<b>Proformas</b>", cell_header_style),
+                Paragraph("<b>Growth %</b>", cell_header_style)
+            ]]
+            for _, r in monthly_table.iterrows():
+                m_data.append([
+                    Paragraph(str(r['YearMonth']), cell_style),
+                    Paragraph(format_currency(r['Total_Revenue']), cell_style),
+                    Paragraph(f"{r['Total_Proformas']:,}", cell_style),
+                    Paragraph(f"{r['Growth_%']:+.1f}%", cell_style)
+                ])
+            t_month = Table(m_data, colWidths=[100, 180, 100, 190])
+            t_month.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0F172A')),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+                ('TOPPADDING', (0,0), (-1,-1), 5),
             ]))
-            story.append(t_breakdown)
+            story.append(t_month)
             
             doc.build(story)
             buffer.seek(0)
             return buffer
-
-            # Create download trigger
-        pdf_data = generate_pdf(commercial_stats, total_revenue, total_proformas_count, growth_text)
+        # PDF Download Button
+        comp_df_pass = comp_df if len(unique_periods) >= 2 else pd.DataFrame()
+        pdf_file = generate_comparison_pdf(total_revenue, total_proformas, comp_df_pass, monthly_df)
+        
         st.download_button(
-            label="📥 Export Report as PDF",
-            data=pdf_data,
-            file_name=f"Sales_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+            label="📥 Export Professional Comparison PDF Report",
+            data=pdf_file,
+            file_name=f"Comparison_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
             mime="application/pdf"
         )
-        
-        st.markdown("---")
 
-        # --- Dashboard Visuals ---
-        col_left, col_right = st.columns(2)
-        
-        with col_left:
-            st.subheader("👩‍💼 Performance Breakdown Table")
-            st.dataframe(
-                commercial_stats.style.format({'Total_Net_a_Payer': '{:,.2f} FCFA', 'Total_Proformas': '{:,}'}),
-                use_container_width=True
-            )
-            
-        with col_right:
-            st.subheader("📊 Net à Payer by Commercial Chart")
-            fig = px.bar(commercial_stats, x='Commercial', y='Total_Net_a_Payer', text_auto='.2s', labels={'Total_Net_a_Payer': 'Net à Payer'})
-            st.plotly_chart(fig, use_container_width=True)
-            
-        st.markdown("---")
-        st.subheader("📅 Combined Monthly Evolution")
-        monthly_sales_str = monthly_sales.copy()
-        monthly_sales_str['YearMonth'] = monthly_sales_str['YearMonth'].astype(str)
-        fig_trend = px.line(monthly_sales_str.sort_values('YearMonth'), x='YearMonth', y='Net_a_Payer', markers=True)
-        st.plotly_chart(fig_trend, use_container_width=True)
 else:
-    st.info("👋 You can select and drop multiple files together here to calculate everything all at once.")
+    st.info("👋 Upload multiple Excel sales files above to generate comparative analysis.")
