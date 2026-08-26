@@ -18,7 +18,7 @@ from reportlab.lib import colors
 CURRENCY_SYMBOL = "FCFA"
 
 st.set_page_config(page_title="Professional Sales & Comparison Dashboard", layout="wide")
-st.title("📊 Multi-Period Commercial Performance & Variance Dashboard")
+st.title("📊 Multi-Period Commercial Performance Dashboard")
 st.markdown("---")
 
 # 1. Multi-File Uploader
@@ -32,6 +32,12 @@ def format_currency(val):
     if CURRENCY_SYMBOL in ["$", "€", "£"]:
         return f"{CURRENCY_SYMBOL}{val:,.2f}"
     return f"{val:,.0f} {CURRENCY_SYMBOL}"
+
+def format_signed_currency(val):
+    sign = "+" if val > 0 else ""
+    if CURRENCY_SYMBOL in ["$", "€", "£"]:
+        return f"{sign}{CURRENCY_SYMBOL}{val:,.2f}"
+    return f"{sign}{val:,.0f} {CURRENCY_SYMBOL}"
 
 if uploaded_files:
     all_dfs = []
@@ -58,11 +64,8 @@ if uploaded_files:
             st.error(f"Error reading {uploaded_file.name}: {e}")
 
     if all_dfs:
-        # Merge all uploaded excel sheets
         df = pd.concat(all_dfs, ignore_index=True)
         df['YearMonth'] = df['Date'].dt.to_period('M')
-        
-        # Determine Periods dynamically
         unique_periods = sorted(df['YearMonth'].unique())
         
         # --- Section 1: Executive Overview KPIs ---
@@ -95,14 +98,13 @@ if uploaded_files:
 
         st.markdown("---")
 
-        # Check for 3 distinct periods
         if len(unique_periods) >= 3:
             periods_3 = unique_periods[-3:]
             p1, p2, p3 = periods_3[0], periods_3[1], periods_3[2]
             
-            # --- Section 2: 3-Month Chiffre d'Affaires (Revenue) Breakdown ---
-            st.subheader("👩‍💼 1. Chiffre d'Affaires (Revenue) 3-Month Breakdown")
-            st.info(f"💡 Evaluated across 3 periods: **{p1}** ➔ **{p2}** ➔ **{p3}**")
+            # --- Section 2: Revenue Table ---
+            st.subheader("👩‍💼 1. Monthly Revenue breakdown per Commercial")
+            st.info(f"💡 Evaluated across periods: **{p1}** ➔ **{p2}** ➔ **{p3}**")
             
             pivot_rev = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='sum', fill_value=0)
             
@@ -110,13 +112,13 @@ if uploaded_files:
             display_rev_df[f"Rev. {p3} (Latest)"] = pivot_rev[p3].apply(format_currency)
             display_rev_df[f"Rev. {p2}"] = pivot_rev[p2].apply(format_currency)
             display_rev_df[f"Rev. {p1}"] = pivot_rev[p1].apply(format_currency)
-            display_rev_df["3-Month Total Revenue"] = (pivot_rev[p3] + pivot_rev[p2] + pivot_rev[p1]).apply(format_currency)
+            display_rev_df["Total 3-Month Revenue"] = (pivot_rev[p3] + pivot_rev[p2] + pivot_rev[p1]).apply(format_currency)
             
             st.dataframe(display_rev_df.reset_index(), use_container_width=True)
 
-            # --- Section 3: Proforma Count Breakdown ---
+            # --- Section 3: Proforma Count Table ---
             st.markdown("---")
-            st.subheader("📑 2. Total Proformas Issued (3-Month Breakdown)")
+            st.subheader("📑 2. Monthly Proforma Count Breakdown per Commercial")
             
             pivot_prof = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='count', fill_value=0)
             
@@ -128,11 +130,11 @@ if uploaded_files:
             
             st.dataframe(display_prof_df.reset_index(), use_container_width=True)
 
-            # --- Section 4: FINAL EXECUTIVE CONCLUSION TABLE ---
+            # --- Section 4: CLEAR TABLE 3 - EXECUTIVE CONCLUSION MATRIX ---
             st.markdown("---")
-            st.subheader("🏆 3. Executive Conclusion: Performance & Progression Matrix")
-            st.write("This table combines both **Revenue Growth** and **Proforma Volume** to determine each commercial's final progression status.")
-            
+            st.subheader("🏆 3. Commercial Progression Verdict (Comparison Table)")
+            st.write("This clear summary evaluates each commercial's overall 3-month progression by comparing **Month 3 vs. Month 1** across both **Revenue** and **Proforma Volume**.")
+
             conclusion_rows = []
             
             for comm in pivot_rev.index:
@@ -144,31 +146,58 @@ if uploaded_files:
                 prof_m3 = pivot_prof.loc[comm, p3]
                 prof_diff = prof_m3 - prof_m1
                 
-                # Progression evaluation based on both metrics
+                # Clear Categorization Logic
                 if rev_diff > 0 and prof_diff > 0:
-                    status = "📈 Strong Advance (Rev & Vol Up)"
-                elif rev_diff > 0:
-                    status = "💹 Revenue Advance (Rev Up)"
-                elif prof_diff > 0:
-                    status = "📑 Volume Advance (Vol Up)"
+                    status = "🟢 Strong Advance"
+                    explanation = "Both Revenue and Proformas increased"
+                elif rev_diff > 0 and prof_diff <= 0:
+                    status = "🔵 Revenue Advance"
+                    explanation = "Revenue grew despite fewer proformas"
+                elif rev_diff <= 0 and prof_diff > 0:
+                    status = "🟡 Volume Advance"
+                    explanation = "More proformas issued, but lower total revenue"
                 else:
-                    status = "📉 Declining (Rev & Vol Down)"
+                    status = "🔴 Declining"
+                    explanation = "Both Revenue and Proforma count dropped"
                     
                 conclusion_rows.append({
                     'Commercial': comm,
-                    'Final Verdict': status,
-                    "Chiffre d'Affaires Growth": format_currency(rev_diff),
-                    'Proforma Count Growth': f"{prof_diff:+} proformas",
-                    'Total Revenue (3M)': format_currency(pivot_rev.loc[comm, p3] + pivot_rev.loc[comm, p2] + pivot_rev.loc[comm, p1]),
-                    'Total Proformas (3M)': pivot_prof.loc[comm, p3] + pivot_prof.loc[comm, p2] + pivot_prof.loc[comm, p1]
+                    'Verdict Status': status,
+                    'Revenue Diff (M3 vs M1)': format_signed_currency(rev_diff),
+                    'Proforma Diff (M3 vs M1)': f"{prof_diff:+} proformas",
+                    'Summary Explanation': explanation,
+                    'M1 Revenue': format_currency(rev_m1),
+                    'M3 Revenue': format_currency(rev_m3),
+                    'M1 Proformas': prof_m1,
+                    'M3 Proformas': prof_m3,
+                    'raw_rev_diff': rev_diff
                 })
                 
-            conclusion_df = pd.DataFrame(conclusion_rows).sort_values(by='Final Verdict', ascending=True)
+            conclusion_df = pd.DataFrame(conclusion_rows).sort_values(by='raw_rev_diff', ascending=False)
             
-            # Display Final Conclusion Matrix
-            st.dataframe(conclusion_df, use_container_width=True)
+            # Quick Stats Callout Cards above Table 3
+            advancing_count = len(conclusion_df[conclusion_df['Verdict Status'].str.contains('Advance')])
+            declining_count = len(conclusion_df[conclusion_df['Verdict Status'].str.contains('Declining')])
             
-            # Visualization Chart
+            c_col1, c_col2, c_col3 = st.columns(3)
+            c_col1.metric("Total Commercials Analyzed", len(conclusion_df))
+            c_col2.metric("Commercials Advancing 🟢", advancing_count)
+            c_col3.metric("Commercials Declining 🔴", declining_count)
+            
+            # Simplified columns display for Table 3
+            table3_display = conclusion_df[[
+                'Commercial', 
+                'Verdict Status', 
+                'Revenue Diff (M3 vs M1)', 
+                'Proforma Diff (M3 vs M1)', 
+                'Summary Explanation',
+                'M1 Revenue', 
+                'M3 Revenue'
+            ]]
+            
+            st.dataframe(table3_display, use_container_width=True)
+
+            # Chart Visualization
             fig_comp = go.Figure()
             for p in periods_3:
                 fig_comp.add_trace(go.Bar(
@@ -189,7 +218,7 @@ if uploaded_files:
 
         st.markdown("---")
 
-        # --- Section 5: Monthly Evolution & Variance ---
+        # --- Section 5: Monthly Evolution ---
         st.subheader("📅 Combined Monthly Revenue Evolution")
         
         monthly_df = df.groupby('YearMonth').agg(
@@ -264,24 +293,22 @@ if uploaded_files:
             story.append(t_exec)
             story.append(Spacer(1, 12))
             
-            # Final Conclusion Matrix Table in PDF
+            # Final Conclusion Table in PDF
             if not conc_df.empty:
-                story.append(Paragraph("Executive Conclusion: Commercial Progression Matrix", heading_style))
-                cols = ['Commercial', 'Final Verdict', "Chiffre d'Affaires Growth", 'Proforma Count Growth']
+                story.append(Paragraph("Commercial Progression Verdict Matrix", heading_style))
+                cols = ['Commercial', 'Verdict Status', 'Revenue Diff (M3 vs M1)', 'Proforma Diff (M3 vs M1)']
                 c_data = [[Paragraph(f"<b>{col}</b>", cell_header_style) for col in cols]]
                 
                 for _, r in conc_df.iterrows():
-                    # Clean verdict string for PDF compatibility
-                    clean_verdict = str(r['Final Verdict']).replace("📈 ", "").replace("💹 ", "").replace("📑 ", "").replace("📉 ", "")
-                    
+                    clean_status = str(r['Verdict Status']).replace("🟢 ", "").replace("🔵 ", "").replace("🟡 ", "").replace("🔴 ", "")
                     c_data.append([
                         Paragraph(str(r['Commercial']), cell_style),
-                        Paragraph(clean_verdict, cell_style),
-                        Paragraph(str(r["Chiffre d'Affaires Growth"]), cell_style),
-                        Paragraph(str(r['Proforma Count Growth']), cell_style)
+                        Paragraph(clean_status, cell_style),
+                        Paragraph(str(r['Revenue Diff (M3 vs M1)']), cell_style),
+                        Paragraph(str(r['Proforma Diff (M3 vs M1)']), cell_style)
                     ])
                 
-                t_conc = Table(c_data, colWidths=[160, 150, 130, 130])
+                t_conc = Table(c_data, colWidths=[150, 140, 140, 140])
                 t_conc.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E3A8A')),
                     ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -300,11 +327,11 @@ if uploaded_files:
         pdf_file = generate_comparison_pdf(total_revenue, total_proformas, conc_pass)
         
         st.download_button(
-            label="📥 Export Final Executive Conclusion Report as PDF",
+            label="📥 Export Executive Conclusion Report as PDF",
             data=pdf_file,
             file_name=f"Executive_Conclusion_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
             mime="application/pdf"
         )
 
 else:
-    st.info("👋 Upload 3 Excel sales files above to generate the Executive Conclusion Matrix.")
+    st.info("👋 Upload 3 Excel sales files above to generate the analysis.")
