@@ -202,7 +202,7 @@ if uploaded_files:
             )
 
             # ---------------------------------------------------------
-            # TABLE 3: EXECUTIVE CONCLUSION MATRIX
+            # TABLE 3: EXECUTIVE CONCLUSION MATRIX (WITH DUAL EXPORT)
             # ---------------------------------------------------------
             st.markdown("---")
             st.subheader("🏆 3. Commercial Progression Verdict (Comparison Table)")
@@ -252,15 +252,37 @@ if uploaded_files:
             
             st.dataframe(table3_display, use_container_width=True)
             
-            # PDF Download for Table 3
-            pdf_table3 = generate_table_pdf("3. Commercial Progression Verdict Matrix", table3_display)
-            st.download_button(
-                label="📄 Print / Download Table 3 (Progression Verdict) as PDF",
-                data=pdf_table3,
-                file_name=f"Table3_Progression_Verdict_{datetime.now().strftime('%Y%m%d')}.pdf",
-                mime="application/pdf",
-                key="btn_pdf_table3"
-            )
+            # ---------------------------------------------------------
+            # DUAL PDF EXPORT FOR TABLE 3 (ADMIN vs USER)
+            # ---------------------------------------------------------
+            st.write("📥 **Select Export Type for Table 3:**")
+            exp_col1, exp_col2 = st.columns(2)
+            
+            with exp_col1:
+                # ADMIN EXPORT (Includes all info: Revenue Diff, Proforma Diff, Verdict)
+                table3_admin_df = table3_display.copy()
+                pdf_table3_admin = generate_table_pdf("3. Commercial Progression Verdict (ADMIN - FULL REPORT)", table3_admin_df)
+                
+                st.download_button(
+                    label="👑 Export ADMIN PDF (Full Info + Chiffre d'Affaires)",
+                    data=pdf_table3_admin,
+                    file_name=f"Table3_ADMIN_Full_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    key="btn_pdf_table3_admin"
+                )
+                
+            with exp_col2:
+                # USER EXPORT (Hides Revenue Diff column)
+                table3_user_df = table3_display[['Commercial', 'Verdict Status', 'Proforma Diff (M3 vs M1)', 'Summary Explanation']].copy()
+                pdf_table3_user = generate_table_pdf("3. Commercial Progression Verdict (USER / STAFF REPORT)", table3_user_df)
+                
+                st.download_button(
+                    label="👤 Export USER PDF (Without Chiffre d'Affaires)",
+                    data=pdf_table3_user,
+                    file_name=f"Table3_USER_NoRevenue_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    key="btn_pdf_table3_user"
+                )
 
             # Chart Visualization
             st.markdown("---")
