@@ -94,62 +94,61 @@ if uploaded_files:
 
         st.markdown("---")
 
-        # --- Section 2: Commercial Progression & Comparison Analysis ---
-        st.subheader("👩‍💼 Commercial Progression Analysis (Advancement / Decline)")
+       # --- Section 2: Multi-Period Commercial Progression Analysis ---
+        st.subheader("👩‍💼 Multi-Period Commercial Progression Analysis")
         
         if len(unique_periods) >= 2:
-            p_recent = unique_periods[-1]
-            p_previous = unique_periods[-2]
+            st.info(f"💡 Analyzed Data Across **{len(unique_periods)} Periods**: {', '.join([str(p) for p in unique_periods])}")
             
-            st.info(f"💡 Comparing recent period **{p_recent}** vs previous period **{p_previous}**")
+            # Pivot table to show revenue per commercial for EVERY uploaded period
+            pivot_rev = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='sum', fill_value=0)
             
-            df_recent = df[df['YearMonth'] == p_recent].groupby('Commercial').agg(
-                Recent_Revenue=('Net_a_Payer', 'sum'),
-                Recent_Proformas=('Net_a_Payer', 'count')
-            ).reset_index()
+            # Pivot table for proformas count
+            pivot_prof = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='count', fill_value=0)
             
-            df_prev = df[df['YearMonth'] == p_previous].groupby('Commercial').agg(
-                Prev_Revenue=('Net_a_Payer', 'sum'),
-                Prev_Proformas=('Net_a_Payer', 'count')
-            ).reset_index()
+            # Determine overall progression status (Latest Period vs Previous Period)
+            latest_p = unique_periods[-1]
+            prev_p = unique_periods[-2]
             
-            # Merge for comparison
-            comp_df = pd.merge(df_recent, df_prev, on='Commercial', how='outer').fillna(0)
-            comp_df['Revenue_Diff'] = comp_df['Recent_Revenue'] - comp_df['Prev_Revenue']
-            comp_df['Proforma_Diff'] = comp_df['Recent_Proformas'] - comp_df['Prev_Proformas']
+            diff = pivot_rev[latest_p] - pivot_rev[prev_p]
             
-            # Progression logic
-            def determine_status(row):
-                if row['Revenue_Diff'] > 0:
-                    return "📈 Advancing"
-                elif row['Revenue_Diff'] < 0:
-                    return "📉 Declining"
-                else:
-                    return "➖ Stable"
-                    
-            comp_df['Status'] = comp_df.apply(determine_status, axis=1)
-            comp_df = comp_df.sort_values(by='Revenue_Diff', ascending=False)
+            def get_status(val):
+                if val > 0: return "(+) Advancing"
+                elif val < 0: return "(-) Declining"
+                else: return "(=) Stable"
+                
+            status_series = diff.apply(get_status)
             
-            # Formatted table for UI
-            display_comp = comp_df.copy()
-            display_comp['Recent Revenue'] = display_comp['Recent_Revenue'].apply(format_currency)
-            display_comp['Previous Revenue'] = display_comp['Prev_Revenue'].apply(format_currency)
-            display_comp['Difference'] = display_comp['Revenue_Diff'].apply(format_currency)
+            # Build display table combining all periods
+            display_df = pd.DataFrame({'Status': status_series})
             
-            st.dataframe(
-                display_comp[['Commercial', 'Status', 'Recent Revenue', 'Previous Revenue', 'Difference', 'Recent_Proformas', 'Prev_Proformas']],
-                use_container_width=True
-            )
+            # Add revenue columns for all periods
+            for p in reversed(unique_periods):
+                display_df[f"Rev. {p}"] = pivot_rev[p].apply(format_currency)
+                
+            display_df['Latest Difference'] = diff.apply(format_currency)
+            display_df = display_df.reset_index().sort_values(by=f"Rev. {latest_p}", ascending=False)
             
-            # Side-by-side comparison chart
+            st.dataframe(display_df, use_container_width=True)
+            
+            # Dynamic Multi-Bar Chart (Shows 3+ periods side-by-side)
             fig_comp = go.Figure()
-            fig_comp.add_trace(go.Bar(x=comp_df['Commercial'], y=comp_df['Prev_Revenue'], name=str(p_previous), marker_color='#94A3B8'))
-            fig_comp.add_trace(go.Bar(x=comp_df['Commercial'], y=comp_df['Recent_Revenue'], name=str(p_recent), marker_color='#1E3A8A'))
-            fig_comp.update_layout(barmode='group', title="Revenue Comparison per Commercial", xaxis_title="Commercial", yaxis_title="Net à Payer")
+            for p in unique_periods:
+                fig_comp.add_trace(go.Bar(
+                    x=pivot_rev.index, 
+                    y=pivot_rev[p], 
+                    name=str(p)
+                ))
+            fig_comp.update_layout(
+                barmode='group', 
+                title=f"Revenue Comparison Across All {len(unique_periods)} Uploaded Periods", 
+                xaxis_title="Commercial", 
+                yaxis_title=f"Net à Payer ({CURRENCY_SYMBOL})"
+            )
             st.plotly_chart(fig_comp, use_container_width=True)
             
         else:
-            st.warning("⚠️ Upload data spanning across at least 2 distinct months to generate the side-by-side commercial comparison.")
+            st.warning("⚠️ Upload data spanning across at least 2 or 3 distinct months/files to generate period comparisons.")
 
         st.markdown("---")
 
