@@ -12,20 +12,77 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 # ---------------------------------------------------------
-# GLOBAL CONFIGURATION
+# GLOBAL CONFIGURATION & LANGUAGE DICTIONARY
 # ---------------------------------------------------------
 CURRENCY_SYMBOL = "FCFA"
 
-st.set_page_config(page_title="Professional Sales & Comparison Dashboard", layout="wide")
-st.title("📊 Multi-Period Commercial Performance Dashboard")
+st.set_page_config(page_title="Commercial Performance Dashboard", layout="wide")
+
+# Sidebar - Language Selection
+st.sidebar.title("🌐 Language / Langue")
+lang = st.sidebar.radio("Select Interface Language:", ["Français 🇫🇷", "English 🇬🇧"])
+is_fr = lang == "Français 🇫🇷"
+
+# Translation Dictionary
+t = {
+    "title": "📊 Tableau de Bord de Performance Commerciale Multi-Périodes" if is_fr else "📊 Multi-Period Commercial Performance Dashboard",
+    "uploader": "Téléchargez trois fichiers Excel ou plus pour effectuer l'analyse comparative" if is_fr else "Upload three or more Excel files to perform comparative analysis",
+    "kpi_header": "📌 Résumé Exécutif des Performances" if is_fr else "📌 Executive Performance Summary",
+    "kpi_rev": "Chiffre d'Affaires Total" if is_fr else "Total Overall Revenue",
+    "kpi_prof": "Nombre Total de Proformas" if is_fr else "Total Proformas Issued",
+    "kpi_comm": "Commercials Actifs" if is_fr else "Active Commercials",
+    "kpi_trend": "Tendance Dernier Mois" if is_fr else "Latest Month Trend",
+    "req_2m": "Nécessite au moins 2 mois" if is_fr else "Requires data from 2+ months",
+    
+    # Table 1
+    "t1_header": "👩‍💼 1. Répartition du Chiffre d'Affaires Mensuel par Commercial" if is_fr else "👩‍💼 1. Monthly Revenue Breakdown per Commercial",
+    "eval_period": "💡 Évalué sur les périodes :" if is_fr else "💡 Evaluated across periods:",
+    "rev_col": "CA" if is_fr else "Rev.",
+    "latest": "Dernier" if is_fr else "Latest",
+    "t1_total": "CA Total sur 3 Mois" if is_fr else "Total 3-Month Revenue",
+    "btn_t1_pdf": "📄 Imprimer / Télécharger Tableau 1 (CA) en PDF" if is_fr else "📄 Print / Download Table 1 (Revenue) as PDF",
+
+    # Table 2
+    "t2_header": "📑 2. Répartition du Nombre de Proformas Mensuel par Commercial" if is_fr else "📑 2. Monthly Proforma Count Breakdown per Commercial",
+    "prof_col": "Proformas" if is_fr else "Proformas",
+    "t2_total": "Total Proformas sur 3 Mois" if is_fr else "Total 3-Month Proformas",
+    "btn_t2_pdf": "📄 Imprimer / Télécharger Tableau 2 (Proformas) en PDF" if is_fr else "📄 Print / Download Table 2 (Proformas) as PDF",
+
+    # Table 3
+    "t3_header": "🏆 3. Verdict de Progression Commerciale (Tableau Comparatif)" if is_fr else "🏆 3. Commercial Progression Verdict (Comparison Table)",
+    "col_comm": "Commercial" if is_fr else "Commercial",
+    "col_status": "Statut du Verdict" if is_fr else "Verdict Status",
+    "col_rev_diff": "Écart CA (M3 vs M1)" if is_fr else "Revenue Diff (M3 vs M1)",
+    "col_prof_diff": "Écart Proforma (M3 vs M1)" if is_fr else "Proforma Diff (M3 vs M1)",
+    "col_exp": "Explication du Résumé" if is_fr else "Summary Explanation",
+    
+    # Verdict Badges & Descriptions
+    "st_strong": "🟢 Forte Avancée" if is_fr else "🟢 Strong Advance",
+    "exp_strong": "Le CA et le nombre de proformas ont augmenté" if is_fr else "Both Revenue and Proformas increased",
+    "st_rev": "🔵 Avancée du CA" if is_fr else "🔵 Revenue Advance",
+    "exp_rev": "Le CA a augmenté malgré moins de proformas" if is_fr else "Revenue grew despite fewer proformas",
+    "st_vol": "🟡 Avancée du Volume" if is_fr else "🟡 Volume Advance",
+    "exp_vol": "Plus de proformas émises, mais CA total inférieur" if is_fr else "More proformas issued, but lower total revenue",
+    "st_dec": "🔴 En Déclin" if is_fr else "🔴 Declining",
+    "exp_dec": "Le CA et le nombre de proformas ont diminué" if is_fr else "Both Revenue and Proforma count dropped",
+    
+    # Export Options
+    "export_t3_title": "📥 Sélectionnez le Type d'Exportation pour le Tableau 3 :" if is_fr else "📥 Select Export Type for Table 3:",
+    "btn_t3_admin": "👑 Exporter PDF ADMIN (Toutes les Infos + Chiffre d'Affaires)" if is_fr else "👑 Export ADMIN PDF (Full Info + Revenue)",
+    "btn_t3_user": "👤 Exporter PDF UTILISATEUR (Sans Chiffre d'Affaires)" if is_fr else "👤 Export USER PDF (Without Revenue)",
+    
+    # Section 5 & Warnings
+    "chart_title": "Graphique Comparatif des Revenus sur 3 Mois" if is_fr else "3-Month Side-by-Side Revenue Comparison Chart",
+    "monthly_header": "📅 Évolution Mensuelle Consolidée du Chiffre d'Affaires" if is_fr else "📅 Combined Monthly Revenue Evolution",
+    "warn_3m": "⚠️ Veuillez télécharger des données couvrant au moins 3 mois distincts." if is_fr else "⚠️ Please upload data spanning across at least 3 distinct months.",
+    "upload_prompt": "👋 Veuillez télécharger au moins 3 fichiers Excel ci-dessus pour générer l'analyse." if is_fr else "👋 Upload 3 Excel sales files above to generate the analysis."
+}
+
+st.title(t["title"])
 st.markdown("---")
 
 # File Uploader
-uploaded_files = st.file_uploader(
-    "Upload three or more Excel files to perform 3-month comparative analysis", 
-    type=["xlsx", "xls"], 
-    accept_multiple_files=True
-)
+uploaded_files = st.file_uploader(t["uploader"], type=["xlsx", "xls"], accept_multiple_files=True)
 
 def format_currency(val):
     if CURRENCY_SYMBOL in ["$", "€", "£"]:
@@ -45,12 +102,12 @@ def generate_table_pdf(title_text, df_to_print):
     story = []
     
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#1E3A8A'), spaceAfter=12)
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=15, textColor=colors.HexColor('#1E3A8A'), spaceAfter=12)
     cell_style = ParagraphStyle('CellStyle', parent=styles['Normal'], fontSize=7, leading=9)
     cell_header_style = ParagraphStyle('HeaderStyle', parent=styles['Normal'], fontSize=7, leading=9, textColor=colors.whitesmoke)
 
     story.append(Paragraph(title_text, title_style))
-    story.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    story.append(Paragraph(f"{'Généré le' if is_fr else 'Generated on'}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
     story.append(Spacer(1, 10))
     
     if not df_to_print.empty:
@@ -61,12 +118,10 @@ def generate_table_pdf(title_text, df_to_print):
             row_cells = []
             for col in cols:
                 val = str(r[col])
-                # Clean emoji badges for clean PDF rendering
                 val = val.replace("🟢 ", "").replace("🔵 ", "").replace("🟡 ", "").replace("🔴 ", "")
                 row_cells.append(Paragraph(val, cell_style))
             table_data.append(row_cells)
         
-        # Calculate dynamic column widths based on table size
         num_cols = len(cols)
         col_width = 570 / num_cols
         
@@ -94,7 +149,6 @@ if uploaded_files:
             df_temp = pd.read_excel(uploaded_file)
             df_temp.columns = [col.strip() for col in df_temp.columns]
             
-            # Column mapping
             date_col = [col for col in df_temp.columns if 'date' in col.lower()]
             comm_col = [col for col in df_temp.columns if 'commercial' in col.lower() or 'agent' in col.lower()]
             net_col = [col for col in df_temp.columns if 'net' in col.lower() or 'payer' in col.lower() or 'total' in col.lower()]
@@ -106,7 +160,7 @@ if uploaded_files:
                 df_temp['Source_File'] = uploaded_file.name
                 all_dfs.append(df_temp)
             else:
-                st.warning(f"⚠️ Skipped '{uploaded_file.name}': Missing required columns.")
+                st.warning(f"⚠️ Skipped '{uploaded_file.name}': Missing columns / Colonnes manquantes.")
         except Exception as e:
             st.error(f"Error reading {uploaded_file.name}: {e}")
 
@@ -116,16 +170,16 @@ if uploaded_files:
         unique_periods = sorted(df['YearMonth'].unique())
         
         # Section 1: KPIs Overview
-        st.subheader("📌 Executive Performance Summary")
+        st.subheader(t["kpi_header"])
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
         
         total_revenue = df['Net_a_Payer'].sum()
         total_proformas = len(df)
         total_commercials = df['Commercial'].nunique()
         
-        kpi1.metric("Total Overall Revenue", format_currency(total_revenue))
-        kpi2.metric("Total Proformas Issued", f"{total_proformas:,}")
-        kpi3.metric("Active Commercials", f"{total_commercials}")
+        kpi1.metric(t["kpi_rev"], format_currency(total_revenue))
+        kpi2.metric(t["kpi_prof"], f"{total_proformas:,}")
+        kpi3.metric(t["kpi_comm"], f"{total_commercials}")
         
         monthly_totals = df.groupby('YearMonth')['Net_a_Payer'].sum().sort_index(ascending=False).reset_index()
         
@@ -134,12 +188,12 @@ if uploaded_files:
             prev_month_val = monthly_totals.iloc[1]['Net_a_Payer']
             growth = ((latest_month_val - prev_month_val) / prev_month_val) * 100 if prev_month_val != 0 else 0
             kpi4.metric(
-                label=f"Latest Month Trend ({monthly_totals.iloc[0]['YearMonth']})", 
+                label=f"{t['kpi_trend']} ({monthly_totals.iloc[0]['YearMonth']})", 
                 value=f"{growth:+.1f}%", 
                 delta=format_currency(latest_month_val - prev_month_val)
             )
         else:
-            kpi4.metric("Latest Month Trend", "N/A", delta="Requires data from 2+ months")
+            kpi4.metric(t["kpi_trend"], "N/A", delta=t["req_2m"])
 
         st.markdown("---")
 
@@ -150,26 +204,25 @@ if uploaded_files:
             # ---------------------------------------------------------
             # TABLE 1: REVENUE BREAKDOWN
             # ---------------------------------------------------------
-            st.subheader("👩‍💼 1. Monthly Revenue Breakdown per Commercial")
-            st.info(f"💡 Evaluated across periods: **{p1}** ➔ **{p2}** ➔ **{p3}**")
+            st.subheader(t["t1_header"])
+            st.info(f"{t['eval_period']} **{p1}** ➔ **{p2}** ➔ **{p3}**")
             
             pivot_rev = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='sum', fill_value=0)
             
             display_rev_df = pd.DataFrame(index=pivot_rev.index)
-            display_rev_df[f"Rev. {p3} (Latest)"] = pivot_rev[p3].apply(format_currency)
-            display_rev_df[f"Rev. {p2}"] = pivot_rev[p2].apply(format_currency)
-            display_rev_df[f"Rev. {p1}"] = pivot_rev[p1].apply(format_currency)
-            display_rev_df["Total 3-Month Revenue"] = (pivot_rev[p3] + pivot_rev[p2] + pivot_rev[p1]).apply(format_currency)
-            display_rev_df = display_rev_df.reset_index()
+            display_rev_df[f"{t['rev_col']} {p3} ({t['latest']})"] = pivot_rev[p3].apply(format_currency)
+            display_rev_df[f"{t['rev_col']} {p2}"] = pivot_rev[p2].apply(format_currency)
+            display_rev_df[f"{t['rev_col']} {p1}"] = pivot_rev[p1].apply(format_currency)
+            display_rev_df[t["t1_total"]] = (pivot_rev[p3] + pivot_rev[p2] + pivot_rev[p1]).apply(format_currency)
+            display_rev_df = display_rev_df.reset_index().rename(columns={'Commercial': t['col_comm']})
             
             st.dataframe(display_rev_df, use_container_width=True)
             
-            # PDF Download for Table 1
-            pdf_table1 = generate_table_pdf("1. Monthly Revenue Breakdown per Commercial", display_rev_df)
+            pdf_table1 = generate_table_pdf(t["t1_header"], display_rev_df)
             st.download_button(
-                label="📄 Print / Download Table 1 (Revenue) as PDF",
+                label=t["btn_t1_pdf"],
                 data=pdf_table1,
-                file_name=f"Table1_Revenue_Breakdown_{datetime.now().strftime('%Y%m%d')}.pdf",
+                file_name=f"Table1_Revenue_{datetime.now().strftime('%Y%m%d')}.pdf",
                 mime="application/pdf",
                 key="btn_pdf_table1"
             )
@@ -178,34 +231,33 @@ if uploaded_files:
             # TABLE 2: PROFORMA BREAKDOWN
             # ---------------------------------------------------------
             st.markdown("---")
-            st.subheader("📑 2. Monthly Proforma Count Breakdown per Commercial")
+            st.subheader(t["t2_header"])
             
             pivot_prof = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='count', fill_value=0)
             
             display_prof_df = pd.DataFrame(index=pivot_prof.index)
-            display_prof_df[f"Proformas {p3} (Latest)"] = pivot_prof[p3]
-            display_prof_df[f"Proformas {p2}"] = pivot_prof[p2]
-            display_prof_df[f"Proformas {p1}"] = pivot_prof[p1]
-            display_prof_df["Total 3-Month Proformas"] = pivot_prof[p3] + pivot_prof[p2] + pivot_prof[p1]
-            display_prof_df = display_prof_df.reset_index()
+            display_prof_df[f"{t['prof_col']} {p3} ({t['latest']})"] = pivot_prof[p3]
+            display_prof_df[f"{t['prof_col']} {p2}"] = pivot_prof[p2]
+            display_prof_df[f"{t['prof_col']} {p1}"] = pivot_prof[p1]
+            display_prof_df[t["t2_total"]] = pivot_prof[p3] + pivot_prof[p2] + pivot_prof[p1]
+            display_prof_df = display_prof_df.reset_index().rename(columns={'Commercial': t['col_comm']})
             
             st.dataframe(display_prof_df, use_container_width=True)
             
-            # PDF Download for Table 2
-            pdf_table2 = generate_table_pdf("2. Monthly Proforma Count Breakdown per Commercial", display_prof_df)
+            pdf_table2 = generate_table_pdf(t["t2_header"], display_prof_df)
             st.download_button(
-                label="📄 Print / Download Table 2 (Proformas) as PDF",
+                label=t["btn_t2_pdf"],
                 data=pdf_table2,
-                file_name=f"Table2_Proforma_Breakdown_{datetime.now().strftime('%Y%m%d')}.pdf",
+                file_name=f"Table2_Proformas_{datetime.now().strftime('%Y%m%d')}.pdf",
                 mime="application/pdf",
                 key="btn_pdf_table2"
             )
 
             # ---------------------------------------------------------
-            # TABLE 3: EXECUTIVE CONCLUSION MATRIX (WITH DUAL EXPORT)
+            # TABLE 3: EXECUTIVE CONCLUSION MATRIX (DUAL EXPORT)
             # ---------------------------------------------------------
             st.markdown("---")
-            st.subheader("🏆 3. Commercial Progression Verdict (Comparison Table)")
+            st.subheader(t["t3_header"])
             
             conclusion_rows = []
             
@@ -219,67 +271,65 @@ if uploaded_files:
                 prof_diff = prof_m3 - prof_m1
                 
                 if rev_diff > 0 and prof_diff > 0:
-                    status = "🟢 Strong Advance"
-                    explanation = "Both Revenue and Proformas increased"
+                    status = t["st_strong"]
+                    explanation = t["exp_strong"]
                 elif rev_diff > 0 and prof_diff <= 0:
-                    status = "🔵 Revenue Advance"
-                    explanation = "Revenue grew despite fewer proformas"
+                    status = t["st_rev"]
+                    explanation = t["exp_rev"]
                 elif rev_diff <= 0 and prof_diff > 0:
-                    status = "🟡 Volume Advance"
-                    explanation = "More proformas issued, but lower total revenue"
+                    status = t["st_vol"]
+                    explanation = t["exp_vol"]
                 else:
-                    status = "🔴 Declining"
-                    explanation = "Both Revenue and Proforma count dropped"
+                    status = t["st_dec"]
+                    explanation = t["exp_dec"]
                     
                 conclusion_rows.append({
-                    'Commercial': comm,
-                    'Verdict Status': status,
-                    'Revenue Diff (M3 vs M1)': format_signed_currency(rev_diff),
-                    'Proforma Diff (M3 vs M1)': f"{prof_diff:+} proformas",
-                    'Summary Explanation': explanation,
+                    t['col_comm']: comm,
+                    t['col_status']: status,
+                    t['col_rev_diff']: format_signed_currency(rev_diff),
+                    t['col_prof_diff']: f"{prof_diff:+} proformas",
+                    t['col_exp']: explanation,
                     'raw_rev_diff': rev_diff
                 })
                 
             conclusion_df = pd.DataFrame(conclusion_rows).sort_values(by='raw_rev_diff', ascending=False)
             
             table3_display = conclusion_df[[
-                'Commercial', 
-                'Verdict Status', 
-                'Revenue Diff (M3 vs M1)', 
-                'Proforma Diff (M3 vs M1)', 
-                'Summary Explanation'
+                t['col_comm'], 
+                t['col_status'], 
+                t['col_rev_diff'], 
+                t['col_prof_diff'], 
+                t['col_exp']
             ]]
             
             st.dataframe(table3_display, use_container_width=True)
             
-            # ---------------------------------------------------------
-            # DUAL PDF EXPORT FOR TABLE 3 (ADMIN vs USER)
-            # ---------------------------------------------------------
-            st.write("📥 **Select Export Type for Table 3:**")
+            # Dual PDF Export Section
+            st.write(t["export_t3_title"])
             exp_col1, exp_col2 = st.columns(2)
             
             with exp_col1:
-                # ADMIN EXPORT (Includes all info: Revenue Diff, Proforma Diff, Verdict)
                 table3_admin_df = table3_display.copy()
-                pdf_table3_admin = generate_table_pdf("3. Commercial Progression Verdict (ADMIN - FULL REPORT)", table3_admin_df)
+                admin_pdf_title = f"{t['t3_header']} (ADMIN)"
+                pdf_table3_admin = generate_table_pdf(admin_pdf_title, table3_admin_df)
                 
                 st.download_button(
-                    label="👑 Export ADMIN PDF (Full Info + Chiffre d'Affaires)",
+                    label=t["btn_t3_admin"],
                     data=pdf_table3_admin,
-                    file_name=f"Table3_ADMIN_Full_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    file_name=f"Table3_ADMIN_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
                     key="btn_pdf_table3_admin"
                 )
                 
             with exp_col2:
-                # USER EXPORT (Hides Revenue Diff column)
-                table3_user_df = table3_display[['Commercial', 'Verdict Status', 'Proforma Diff (M3 vs M1)', 'Summary Explanation']].copy()
-                pdf_table3_user = generate_table_pdf("3. Commercial Progression Verdict (USER / STAFF REPORT)", table3_user_df)
+                table3_user_df = table3_display[[t['col_comm'], t['col_status'], t['col_prof_diff'], t['col_exp']]].copy()
+                user_pdf_title = f"{t['t3_header']} (UTILISATEUR / STAFF)" if is_fr else f"{t['t3_header']} (USER / STAFF)"
+                pdf_table3_user = generate_table_pdf(user_pdf_title, table3_user_df)
                 
                 st.download_button(
-                    label="👤 Export USER PDF (Without Chiffre d'Affaires)",
+                    label=t["btn_t3_user"],
                     data=pdf_table3_user,
-                    file_name=f"Table3_USER_NoRevenue_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    file_name=f"Table3_USER_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
                     key="btn_pdf_table3_user"
                 )
@@ -295,19 +345,19 @@ if uploaded_files:
                 ))
             fig_comp.update_layout(
                 barmode='group', 
-                title="3-Month Side-by-Side Revenue Comparison Chart", 
-                xaxis_title="Commercial", 
+                title=t["chart_title"], 
+                xaxis_title=t["col_comm"], 
                 yaxis_title=f"Net à Payer ({CURRENCY_SYMBOL})"
             )
             st.plotly_chart(fig_comp, use_container_width=True)
 
         else:
-            st.warning(f"⚠️ Please upload data spanning across at least 3 distinct months. Currently detected: {len(unique_periods)} month(s).")
+            st.warning(t["warn_3m"])
 
         st.markdown("---")
 
         # Section 5: Monthly Revenue Evolution
-        st.subheader("📅 Combined Monthly Revenue Evolution")
+        st.subheader(t["monthly_header"])
         
         monthly_df = df.groupby('YearMonth').agg(
             Total_Revenue=('Net_a_Payer', 'sum'),
@@ -341,10 +391,10 @@ if uploaded_files:
                 x='YearMonth', 
                 y='Total_Revenue', 
                 markers=True, 
-                title="Monthly Revenue Trend",
+                title=t["monthly_header"],
                 labels={'Total_Revenue': 'Revenue', 'YearMonth': 'Month'}
             )
             st.plotly_chart(fig_line, use_container_width=True)
 
 else:
-    st.info("👋 Upload 3 Excel sales files above to generate the analysis.")
+    st.info(t["upload_prompt"])
