@@ -94,46 +94,59 @@ if uploaded_files:
 
         st.markdown("---")
 
-       # --- Section 2: Multi-Period Commercial Progression Analysis ---
-        st.subheader("👩‍💼 Multi-Period Commercial Progression Analysis")
+      # --- Section 2: Multi-Period Commercial Progression Analysis (3-Month Trend) ---
+        st.subheader("👩‍💼 3-Month Commercial Progression Analysis")
         
-        if len(unique_periods) >= 2:
-            st.info(f"💡 Analyzed Data Across **{len(unique_periods)} Periods**: {', '.join([str(p) for p in unique_periods])}")
+        if len(unique_periods) >= 3:
+            st.info(f"💡 3-Month Comparison Active for Periods: {', '.join([str(p) for p in unique_periods[-3:]])}")
             
-            # Pivot table to show revenue per commercial for EVERY uploaded period
+            # Use the last 3 periods for evaluation
+            periods_3 = unique_periods[-3:]
+            p1, p2, p3 = periods_3[0], periods_3[1], periods_3[2]
+            
+            # Pivot table to get exact revenue for each of the 3 months per commercial
             pivot_rev = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='sum', fill_value=0)
             
-            # Pivot table for proformas count
-            pivot_prof = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='count', fill_value=0)
-            
-            # Determine overall progression status (Latest Period vs Previous Period)
-            latest_p = unique_periods[-1]
-            prev_p = unique_periods[-2]
-            
-            diff = pivot_rev[latest_p] - pivot_rev[prev_p]
-            
-            def get_status(val):
-                if val > 0: return "(+) Advancing"
-                elif val < 0: return "(-) Declining"
-                else: return "(=) Stable"
+            # 3-Month Progression Logic
+            def calculate_3month_trend(row):
+                m1 = row.get(p1, 0)
+                m2 = row.get(p2, 0)
+                m3 = row.get(p3, 0)
                 
-            status_series = diff.apply(get_status)
+                # Advancing: Month 3 > Month 2 AND Month 3 > Month 1 (overall growth pattern)
+                if m3 > m2 and m3 > m1:
+                    return "(+) Advancing"
+                # Declining: Month 3 < Month 2 AND Month 3 < Month 1 (overall downward pattern)
+                elif m3 < m2 and m3 < m1:
+                    return "(-) Declining"
+                # If Month 3 improved over Month 2 after a drop, or steady overall growth
+                elif m3 > m2:
+                    return "(+) Advancing"
+                else:
+                    return "(-) Declining"
+
+            # Apply 3-month logic across rows
+            pivot_rev['Status'] = pivot_rev.apply(calculate_3month_trend, axis=1)
             
-            # Build display table combining all periods
-            display_df = pd.DataFrame({'Status': status_series})
+            # Build the clean display table without 'Latest Difference'
+            display_df = pd.DataFrame({'Status': pivot_rev['Status']})
             
-            # Add revenue columns for all periods
-            for p in reversed(unique_periods):
-                display_df[f"Rev. {p}"] = pivot_rev[p].apply(format_currency)
-                
-            display_df['Latest Difference'] = diff.apply(format_currency)
-            display_df = display_df.reset_index().sort_values(by=f"Rev. {latest_p}", ascending=False)
+            # Display columns for Month 3, Month 2, and Month 1
+            display_df[f"Rev. {p3} (Latest)"] = pivot_rev[p3].apply(format_currency)
+            display_df[f"Rev. {p2}"] = pivot_rev[p2].apply(format_currency)
+            display_df[f"Rev. {p1}"] = pivot_rev[p1].apply(format_currency)
             
-            st.dataframe(display_df, use_container_width=True)
+            display_df = display_df.reset_index().sort_values(by=f"Rev. {p3} (Latest)", ascending=False)
             
-            # Dynamic Multi-Bar Chart (Shows 3+ periods side-by-side)
+            # Display Table (No 'Latest Difference' column)
+            st.dataframe(
+                display_df[['Commercial', 'Status', f"Rev. {p3} (Latest)", f"Rev. {p2}", f"Rev. {p1}"]], 
+                use_container_width=True
+            )
+            
+            # Side-by-Side 3-Month Bar Chart
             fig_comp = go.Figure()
-            for p in unique_periods:
+            for p in periods_3:
                 fig_comp.add_trace(go.Bar(
                     x=pivot_rev.index, 
                     y=pivot_rev[p], 
@@ -141,15 +154,14 @@ if uploaded_files:
                 ))
             fig_comp.update_layout(
                 barmode='group', 
-                title=f"Revenue Comparison Across All {len(unique_periods)} Uploaded Periods", 
+                title="3-Month Side-by-Side Revenue Comparison", 
                 xaxis_title="Commercial", 
                 yaxis_title=f"Net à Payer ({CURRENCY_SYMBOL})"
             )
             st.plotly_chart(fig_comp, use_container_width=True)
             
         else:
-            st.warning("⚠️ Upload data spanning across at least 2 or 3 distinct months/files to generate period comparisons.")
-
+            st.warning(f"⚠️ Upload data spanning across at least 3 distinct months to enable 3-month progression analysis. Currently detected: {len(unique_periods)} month(s).")
         st.markdown("---")
 
         # --- Section 3: Monthly Breakdown & Evolution ---
