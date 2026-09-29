@@ -26,7 +26,7 @@ is_fr = lang == "Français 🇫🇷"
 # Translation Dictionary
 t = {
     "title": "📊 Tableau de Bord de Performance Commerciale Multi-Périodes" if is_fr else "📊 Multi-Period Commercial Performance Dashboard",
-    "uploader": "Téléchargez trois fichiers Excel ou plus pour effectuer l'analyse comparative" if is_fr else "Upload three or more Excel files to perform comparative analysis",
+    "uploader": "Téléchargez un ou plusieurs fichiers Excel pour effectuer l'analyse" if is_fr else "Upload one or more Excel files to perform analysis",
     "kpi_header": "📌 Résumé Exécutif des Performances" if is_fr else "📌 Executive Performance Summary",
     "kpi_rev": "Chiffre d'Affaires Total" if is_fr else "Total Overall Revenue",
     "kpi_prof": "Nombre Total de Proformas" if is_fr else "Total Proformas Issued",
@@ -39,21 +39,21 @@ t = {
     "eval_period": "💡 Évalué sur les périodes :" if is_fr else "💡 Evaluated across periods:",
     "rev_col": "CA" if is_fr else "Rev.",
     "latest": "Dernier" if is_fr else "Latest",
-    "t1_total": "CA Total sur 3 Mois" if is_fr else "Total 3-Month Revenue",
+    "t1_total": "CA Total sur la Période" if is_fr else "Total Revenue Across Periods",
     "btn_t1_pdf": "📄 Imprimer / Télécharger Tableau 1 (CA) en PDF" if is_fr else "📄 Print / Download Table 1 (Revenue) as PDF",
 
     # Table 2
     "t2_header": "📑 2. Répartition du Nombre de Proformas Mensuel par Commercial" if is_fr else "📑 2. Monthly Proforma Count Breakdown per Commercial",
     "prof_col": "Proformas" if is_fr else "Proformas",
-    "t2_total": "Total Proformas sur 3 Mois" if is_fr else "Total 3-Month Proformas",
+    "t2_total": "Total Proformas sur la Période" if is_fr else "Total Proformas Across Periods",
     "btn_t2_pdf": "📄 Imprimer / Télécharger Tableau 2 (Proformas) en PDF" if is_fr else "📄 Print / Download Table 2 (Proformas) as PDF",
 
     # Table 3
     "t3_header": "🏆 3. Verdict de Progression Commerciale (Tableau Comparatif)" if is_fr else "🏆 3. Commercial Progression Verdict (Comparison Table)",
     "col_comm": "Commercial" if is_fr else "Commercial",
     "col_status": "Statut du Verdict" if is_fr else "Verdict Status",
-    "col_rev_diff": "Écart CA (M3 vs M1)" if is_fr else "Revenue Diff (M3 vs M1)",
-    "col_prof_diff": "Écart Proforma (M3 vs M1)" if is_fr else "Proforma Diff (M3 vs M1)",
+    "col_rev_diff": "Écart CA (Période Récente vs Ancienne)" if is_fr else "Revenue Diff (Recent vs Earlier)",
+    "col_prof_diff": "Écart Proforma (Période Récente vs Ancienne)" if is_fr else "Proforma Diff (Recent vs Earlier)",
     "col_exp": "Explication du Résumé" if is_fr else "Summary Explanation",
     
     # Verdict Badges & Descriptions
@@ -72,10 +72,10 @@ t = {
     "btn_t3_user": "👤 Exporter PDF UTILISATEUR (Sans Chiffre d'Affaires)" if is_fr else "👤 Export USER PDF (Without Revenue)",
     
     # Section 5 & Warnings
-    "chart_title": "Graphique Comparatif des Revenus sur 3 Mois" if is_fr else "3-Month Side-by-Side Revenue Comparison Chart",
+    "chart_title": "Graphique Comparatif des Revenus par Période" if is_fr else "Side-by-Side Revenue Comparison Chart",
     "monthly_header": "📅 Évolution Mensuelle Consolidée du Chiffre d'Affaires" if is_fr else "📅 Combined Monthly Revenue Evolution",
-    "warn_3m": "⚠️ Veuillez télécharger des données couvrant au moins 3 mois distincts." if is_fr else "⚠️ Please upload data spanning across at least 3 distinct months.",
-    "upload_prompt": "👋 Veuillez télécharger au moins 3 fichiers Excel ci-dessus pour générer l'analyse." if is_fr else "👋 Upload 3 Excel sales files above to generate the analysis."
+    "warn_single_period": "ℹ️ 1 seule période détectée : Téléchargez au moins 2 fichiers/mois pour voir l'analyse comparative de progression." if is_fr else "ℹ️ Single period detected: Upload 2+ files/months to enable comparison verdict.",
+    "upload_prompt": "👋 Veuillez télécharger au moins 1 fichier Excel ci-dessus pour générer l'analyse." if is_fr else "👋 Upload 1 or more Excel sales files above to generate the analysis."
 }
 
 st.title(t["title"])
@@ -160,7 +160,7 @@ if uploaded_files:
                 df_temp['Source_File'] = uploaded_file.name
                 all_dfs.append(df_temp)
             else:
-                st.warning(f"⚠️ Skipped '{uploaded_file.name}': Missing columns / Colonnes manquantes.")
+                st.warning(f"⚠️ Skipped '{uploaded_file.name}': Missing required columns.")
         except Exception as e:
             st.error(f"Error reading {uploaded_file.name}: {e}")
 
@@ -197,78 +197,78 @@ if uploaded_files:
 
         st.markdown("---")
 
-        if len(unique_periods) >= 3:
-            periods_3 = unique_periods[-3:]
-            p1, p2, p3 = periods_3[0], periods_3[1], periods_3[2]
+        # ---------------------------------------------------------
+        # TABLE 1: REVENUE BREAKDOWN (WORKS FOR ANY NUMBER OF PERIODS)
+        # ---------------------------------------------------------
+        st.subheader(t["t1_header"])
+        st.info(f"{t['eval_period']} **{', '.join([str(p) for p in unique_periods])}**")
+        
+        pivot_rev = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='sum', fill_value=0)
+        
+        display_rev_df = pd.DataFrame(index=pivot_rev.index)
+        for p in reversed(unique_periods):
+            display_rev_df[f"{t['rev_col']} {p}"] = pivot_rev[p].apply(format_currency)
             
-            # ---------------------------------------------------------
-            # TABLE 1: REVENUE BREAKDOWN
-            # ---------------------------------------------------------
-            st.subheader(t["t1_header"])
-            st.info(f"{t['eval_period']} **{p1}** ➔ **{p2}** ➔ **{p3}**")
-            
-            pivot_rev = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='sum', fill_value=0)
-            
-            display_rev_df = pd.DataFrame(index=pivot_rev.index)
-            display_rev_df[f"{t['rev_col']} {p3} ({t['latest']})"] = pivot_rev[p3].apply(format_currency)
-            display_rev_df[f"{t['rev_col']} {p2}"] = pivot_rev[p2].apply(format_currency)
-            display_rev_df[f"{t['rev_col']} {p1}"] = pivot_rev[p1].apply(format_currency)
-            display_rev_df[t["t1_total"]] = (pivot_rev[p3] + pivot_rev[p2] + pivot_rev[p1]).apply(format_currency)
-            display_rev_df = display_rev_df.reset_index().rename(columns={'Commercial': t['col_comm']})
-            
-            st.dataframe(display_rev_df, use_container_width=True)
-            
-            pdf_table1 = generate_table_pdf(t["t1_header"], display_rev_df)
-            st.download_button(
-                label=t["btn_t1_pdf"],
-                data=pdf_table1,
-                file_name=f"Table1_Revenue_{datetime.now().strftime('%Y%m%d')}.pdf",
-                mime="application/pdf",
-                key="btn_pdf_table1"
-            )
+        display_rev_df[t["t1_total"]] = pivot_rev.sum(axis=1).apply(format_currency)
+        display_rev_df = display_rev_df.reset_index().rename(columns={'Commercial': t['col_comm']})
+        
+        st.dataframe(display_rev_df, use_container_width=True)
+        
+        pdf_table1 = generate_table_pdf(t["t1_header"], display_rev_df)
+        st.download_button(
+            label=t["btn_t1_pdf"],
+            data=pdf_table1,
+            file_name=f"Table1_Revenue_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf",
+            key="btn_pdf_table1"
+        )
 
-            # ---------------------------------------------------------
-            # TABLE 2: PROFORMA BREAKDOWN
-            # ---------------------------------------------------------
-            st.markdown("---")
-            st.subheader(t["t2_header"])
+        # ---------------------------------------------------------
+        # TABLE 2: PROFORMA BREAKDOWN (WORKS FOR ANY NUMBER OF PERIODS)
+        # ---------------------------------------------------------
+        st.markdown("---")
+        st.subheader(t["t2_header"])
+        
+        pivot_prof = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='count', fill_value=0)
+        
+        display_prof_df = pd.DataFrame(index=pivot_prof.index)
+        for p in reversed(unique_periods):
+            display_prof_df[f"{t['prof_col']} {p}"] = pivot_prof[p]
             
-            pivot_prof = df.pivot_table(index='Commercial', columns='YearMonth', values='Net_a_Payer', aggfunc='count', fill_value=0)
-            
-            display_prof_df = pd.DataFrame(index=pivot_prof.index)
-            display_prof_df[f"{t['prof_col']} {p3} ({t['latest']})"] = pivot_prof[p3]
-            display_prof_df[f"{t['prof_col']} {p2}"] = pivot_prof[p2]
-            display_prof_df[f"{t['prof_col']} {p1}"] = pivot_prof[p1]
-            display_prof_df[t["t2_total"]] = pivot_prof[p3] + pivot_prof[p2] + pivot_prof[p1]
-            display_prof_df = display_prof_df.reset_index().rename(columns={'Commercial': t['col_comm']})
-            
-            st.dataframe(display_prof_df, use_container_width=True)
-            
-            pdf_table2 = generate_table_pdf(t["t2_header"], display_prof_df)
-            st.download_button(
-                label=t["btn_t2_pdf"],
-                data=pdf_table2,
-                file_name=f"Table2_Proformas_{datetime.now().strftime('%Y%m%d')}.pdf",
-                mime="application/pdf",
-                key="btn_pdf_table2"
-            )
+        display_prof_df[t["t2_total"]] = pivot_prof.sum(axis=1)
+        display_prof_df = display_prof_df.reset_index().rename(columns={'Commercial': t['col_comm']})
+        
+        st.dataframe(display_prof_df, use_container_width=True)
+        
+        pdf_table2 = generate_table_pdf(t["t2_header"], display_prof_df)
+        st.download_button(
+            label=t["btn_t2_pdf"],
+            data=pdf_table2,
+            file_name=f"Table2_Proformas_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf",
+            key="btn_pdf_table2"
+        )
 
-            # ---------------------------------------------------------
-            # TABLE 3: EXECUTIVE CONCLUSION MATRIX (DUAL EXPORT)
-            # ---------------------------------------------------------
-            st.markdown("---")
-            st.subheader(t["t3_header"])
+        # ---------------------------------------------------------
+        # TABLE 3: EXECUTIVE CONCLUSION MATRIX (IF 2+ PERIODS)
+        # ---------------------------------------------------------
+        st.markdown("---")
+        st.subheader(t["t3_header"])
+        
+        if len(unique_periods) >= 2:
+            p_first = unique_periods[0]
+            p_latest = unique_periods[-1]
             
             conclusion_rows = []
             
             for comm in pivot_rev.index:
-                rev_m1 = pivot_rev.loc[comm, p1]
-                rev_m3 = pivot_rev.loc[comm, p3]
-                rev_diff = rev_m3 - rev_m1
+                rev_first = pivot_rev.loc[comm, p_first]
+                rev_latest = pivot_rev.loc[comm, p_latest]
+                rev_diff = rev_latest - rev_first
                 
-                prof_m1 = pivot_prof.loc[comm, p1]
-                prof_m3 = pivot_prof.loc[comm, p3]
-                prof_diff = prof_m3 - prof_m1
+                prof_first = pivot_prof.loc[comm, p_first]
+                prof_latest = pivot_prof.loc[comm, p_latest]
+                prof_diff = prof_latest - prof_first
                 
                 if rev_diff > 0 and prof_diff > 0:
                     status = t["st_strong"]
@@ -286,19 +286,22 @@ if uploaded_files:
                 conclusion_rows.append({
                     t['col_comm']: comm,
                     t['col_status']: status,
-                    t['col_rev_diff']: format_signed_currency(rev_diff),
-                    t['col_prof_diff']: f"{prof_diff:+} proformas",
+                    f"{t['col_rev_diff']} ({p_latest} vs {p_first})": format_signed_currency(rev_diff),
+                    f"{t['col_prof_diff']} ({p_latest} vs {p_first})": f"{prof_diff:+} proformas",
                     t['col_exp']: explanation,
                     'raw_rev_diff': rev_diff
                 })
                 
             conclusion_df = pd.DataFrame(conclusion_rows).sort_values(by='raw_rev_diff', ascending=False)
             
+            col_rev_diff_name = f"{t['col_rev_diff']} ({p_latest} vs {p_first})"
+            col_prof_diff_name = f"{t['col_prof_diff']} ({p_latest} vs {p_first})"
+            
             table3_display = conclusion_df[[
                 t['col_comm'], 
                 t['col_status'], 
-                t['col_rev_diff'], 
-                t['col_prof_diff'], 
+                col_rev_diff_name, 
+                col_prof_diff_name, 
                 t['col_exp']
             ]]
             
@@ -322,7 +325,7 @@ if uploaded_files:
                 )
                 
             with exp_col2:
-                table3_user_df = table3_display[[t['col_comm'], t['col_status'], t['col_prof_diff'], t['col_exp']]].copy()
+                table3_user_df = table3_display[[t['col_comm'], t['col_status'], col_prof_diff_name, t['col_exp']]].copy()
                 user_pdf_title = f"{t['t3_header']} (UTILISATEUR / STAFF)" if is_fr else f"{t['t3_header']} (USER / STAFF)"
                 pdf_table3_user = generate_table_pdf(user_pdf_title, table3_user_df)
                 
@@ -333,26 +336,25 @@ if uploaded_files:
                     mime="application/pdf",
                     key="btn_pdf_table3_user"
                 )
-
-            # Chart Visualization
-            st.markdown("---")
-            fig_comp = go.Figure()
-            for p in periods_3:
-                fig_comp.add_trace(go.Bar(
-                    x=pivot_rev.index, 
-                    y=pivot_rev[p], 
-                    name=str(p)
-                ))
-            fig_comp.update_layout(
-                barmode='group', 
-                title=t["chart_title"], 
-                xaxis_title=t["col_comm"], 
-                yaxis_title=f"Net à Payer ({CURRENCY_SYMBOL})"
-            )
-            st.plotly_chart(fig_comp, use_container_width=True)
-
         else:
-            st.warning(t["warn_3m"])
+            st.info(t["warn_single_period"])
+
+        # Chart Visualization
+        st.markdown("---")
+        fig_comp = go.Figure()
+        for p in unique_periods:
+            fig_comp.add_trace(go.Bar(
+                x=pivot_rev.index, 
+                y=pivot_rev[p], 
+                name=str(p)
+            ))
+        fig_comp.update_layout(
+            barmode='group', 
+            title=t["chart_title"], 
+            xaxis_title=t["col_comm"], 
+            yaxis_title=f"Net à Payer ({CURRENCY_SYMBOL})"
+        )
+        st.plotly_chart(fig_comp, use_container_width=True)
 
         st.markdown("---")
 
